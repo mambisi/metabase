@@ -1,5 +1,4 @@
 import cx from "classnames";
-import { getIn } from "icepick";
 import {
   forwardRef,
   useCallback,
@@ -28,7 +27,6 @@ import type {
 } from "metabase-types/api";
 
 import { TableCell } from "./TableCell";
-import TableFooter from "./TableFooter";
 import {
   ContentContainer,
   Root,
@@ -77,7 +75,6 @@ interface TableSimpleProps {
 const TableSimpleInner = forwardRef<HTMLDivElement, TableSimpleProps>(
   function TableSimpleInner(
     {
-      card,
       data,
       series,
       settings,
@@ -91,37 +88,45 @@ const TableSimpleInner = forwardRef<HTMLDivElement, TableSimpleProps>(
     }: TableSimpleProps,
     ref,
   ) {
-    const [page, setPage] = useState(0);
-    const [pageSize, setPageSize] = useState(1);
+    const [pageSize, setPageSize] = useState(100); // Initial page size for faster loading
     const [sortColumn, setSortColumn] = useState<number | null>(null);
     const [sortDirection, setSortDirection] = useState("asc");
+    const [visibleRowsCount, setVisibleRowsCount] = useState(100); // Initial visible rows count
+    const [isLoadingMore, setIsLoadingMore] = useState(false);
 
     const headerRef = useRef(null);
-    const footerRef = useRef(null);
     const firstRowRef = useRef(null);
+    const tableContainerRef = useRef<HTMLDivElement>(null);
 
     useLayoutEffect(() => {
       const { height: headerHeight = 0 } = getBoundingClientRectSafe(headerRef);
-      const { height: footerHeight = 0 } = getBoundingClientRectSafe(footerRef);
       const { height: rowHeight = 0 } = getBoundingClientRectSafe(firstRowRef);
-      const currentPageSize = Math.floor(
-        (height - headerHeight - footerHeight) / (rowHeight + 1),
-      );
-      const normalizedPageSize = Math.max(1, currentPageSize);
-      if (pageSize !== normalizedPageSize) {
-        setPageSize(normalizedPageSize);
+
+      if (rowHeight > 0) {
+        // Calculate how many rows can fit in the visible area
+        const visibleRows = Math.max(
+          15,
+          Math.floor((height - headerHeight) / rowHeight),
+        );
+
+        // Set page size to visible rows + buffer
+        setPageSize(visibleRows);
+        setVisibleRowsCount(visibleRows);
       }
-    }, [height, pageSize]);
+    }, [height]);
 
     const setSort = useCallback(
       (colIndex: number) => {
+        // Reset to initial visible rows when sorting changes
+        setVisibleRowsCount(pageSize);
+
         if (sortColumn === colIndex) {
           setSortDirection(direction => (direction === "asc" ? "desc" : "asc"));
         } else {
           setSortColumn(colIndex);
         }
       },
-      [sortColumn],
+      [sortColumn, pageSize],
     );
 
     const checkIsVisualizationClickable = useCallback(
@@ -136,19 +141,7 @@ const TableSimpleInner = forwardRef<HTMLDivElement, TableSimpleProps>(
     );
 
     const { rows, cols } = data;
-    const limit = getIn(card, ["dataset_query", "query", "limit"]) || undefined;
     const getCellBackgroundColor = settings["table._cell_background_getter"];
-
-    const start = pageSize * page;
-    const end = Math.min(rows.length - 1, pageSize * (page + 1) - 1);
-
-    const handlePreviousPage = useCallback(() => {
-      setPage(p => p - 1);
-    }, []);
-
-    const handleNextPage = useCallback(() => {
-      setPage(p => p + 1);
-    }, []);
 
     const rowIndexes = useMemo(() => {
       let indexes = _.range(0, rows.length);
@@ -168,10 +161,39 @@ const TableSimpleInner = forwardRef<HTMLDivElement, TableSimpleProps>(
       return indexes;
     }, [cols, rows, sortColumn, sortDirection]);
 
-    const paginatedRowIndexes = useMemo(
-      () => rowIndexes.slice(start, end + 1),
-      [rowIndexes, start, end],
-    );
+    // Get lazy loaded rows based on visible count
+    const paginatedRowIndexes = useMemo(() => {
+      // If total rows is less than the pageSize, show all rows
+      if (rows.length <= visibleRowsCount) {
+        return rowIndexes;
+      }
+      // Otherwise, use lazy loading to show only the visible rows
+      return rowIndexes.slice(0, visibleRowsCount);
+    }, [rowIndexes, visibleRowsCount, rows.length]);
+
+    // Load more rows when user scrolls
+    const handleScroll = useCallback(() => {
+      if (isLoadingMore || visibleRowsCount >= rows.length) {
+        return;
+      }
+
+      const container = tableContainerRef.current;
+      if (!container) {
+        return;
+      }
+
+      const { scrollTop, scrollHeight, clientHeight } = container;
+      const scrolledToBottom = scrollHeight - scrollTop - clientHeight < 200; // Load more when we're 200px from bottom
+
+      if (scrolledToBottom) {
+        setIsLoadingMore(true);
+        // Using setTimeout to avoid blocking the main thread
+        setTimeout(() => {
+          setVisibleRowsCount(prev => Math.min(prev + pageSize, rows.length));
+          setIsLoadingMore(false);
+        }, 100);
+      }
+    }, [isLoadingMore, visibleRowsCount, rows.length, pageSize]);
 
     const renderColumnHeader = useCallback(
       (col: DatasetColumn, colIndex: number) => {
@@ -231,13 +253,31 @@ const TableSimpleInner = forwardRef<HTMLDivElement, TableSimpleProps>(
         getCellBackgroundColor,
         getExtraDataForClick,
         onVisualizationClick,
+        firstRowRef,
       ],
     );
+
+    // Add effect to register scroll event listener
+    useLayoutEffect(() => {
+      const container = tableContainerRef.current;
+      if (!container) {
+        return;
+      }
+
+      container.addEventListener("scroll", handleScroll);
+
+      return () => {
+        container.removeEventListener("scroll", handleScroll);
+      };
+    }, [handleScroll]);
 
     return (
       <Root className={className} ref={ref}>
         <ContentContainer>
-          <TableContainer className={cx(CS.scrollShow, CS.scrollShowHover)}>
+          <TableContainer
+            ref={tableContainerRef}
+            className={cx(CS.scrollShow, CS.scrollShowHover)}
+          >
             <Table
               className={cx(
                 DashboardS.fullscreenNormalText,
@@ -250,19 +290,19 @@ const TableSimpleInner = forwardRef<HTMLDivElement, TableSimpleProps>(
               </thead>
               <tbody>{paginatedRowIndexes.map(renderRow)}</tbody>
             </Table>
+            {isLoadingMore && rows.length > visibleRowsCount && (
+              <div
+                style={{
+                  textAlign: "center",
+                  padding: "10px",
+                  color: "var(--mb-color-text-medium)",
+                }}
+              >
+                Loading more rows...
+              </div>
+            )}
           </TableContainer>
         </ContentContainer>
-        {pageSize < rows.length && (
-          <TableFooter
-            start={start}
-            end={end}
-            limit={limit}
-            total={rows.length}
-            onPreviousPage={handlePreviousPage}
-            onNextPage={handleNextPage}
-            ref={footerRef}
-          />
-        )}
       </Root>
     );
   },

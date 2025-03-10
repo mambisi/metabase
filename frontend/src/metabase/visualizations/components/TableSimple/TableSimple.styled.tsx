@@ -12,7 +12,10 @@ import { TableRoot } from "metabase/visualizations/components/TableRoot";
 export const Root = styled(TableRoot)`
   display: flex;
   flex-direction: column;
+  background-color: transparent;
   position: relative;
+  height: auto; /* Allow the container to grow as needed */
+  min-height: 100%;
 `;
 
 export const ContentContainer = styled.div`
@@ -27,7 +30,9 @@ export const TableContainer = styled.div`
   right: 0;
   left: 0;
   overflow-x: auto;
-  overflow-y: hidden;
+  overflow-y: auto;
+  height: 100%; /* Ensure container takes full height */
+  scroll-behavior: smooth; /* Smooth scrolling */
 `;
 
 const standardTableStyleReset = css`
