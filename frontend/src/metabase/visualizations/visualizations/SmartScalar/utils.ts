@@ -24,7 +24,6 @@ import {
   ICON_SIZE,
   PERIOD_HIDE_HEIGHT_THRESHOLD,
   PREVIOUS_VALUE_SIZE,
-  SCALAR_TITLE_LINE_HEIGHT,
   SPACING,
 } from "./constants";
 import type { ComparisonMenuOption } from "./types";
@@ -72,7 +71,8 @@ const getWidthWithoutSpacing = (width: number) => {
 export const getValueHeight = (height: number): number => {
   const valueHeight =
     height -
-    (isPeriodVisible(height) ? SCALAR_TITLE_LINE_HEIGHT : 0) -
+    // Period is always hidden now
+    0 -
     PREVIOUS_VALUE_SIZE -
     4 * SPACING;
 

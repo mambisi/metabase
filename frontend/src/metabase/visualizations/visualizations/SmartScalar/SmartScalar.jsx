@@ -4,7 +4,6 @@ import { useEffect, useMemo, useRef } from "react";
 import innerText from "react-innertext";
 import { jt, t } from "ttag";
 
-import { Ellipsified } from "metabase/core/components/Ellipsified";
 import DashboardS from "metabase/css/dashboard.module.css";
 import { getIsNightMode } from "metabase/dashboard/selectors";
 import { color, lighten } from "metabase/lib/colors";
@@ -13,11 +12,10 @@ import { measureTextWidth } from "metabase/lib/measure-text";
 import { useSelector } from "metabase/lib/redux";
 import { isEmpty } from "metabase/lib/validate";
 import EmbedFrameS from "metabase/public/components/EmbedFrame/EmbedFrame.module.css";
-import { Box, Flex, Text, Title, Tooltip, useMantineTheme } from "metabase/ui";
+import { Box, Flex, Text, Tooltip, useMantineTheme } from "metabase/ui";
 import ScalarValue, {
   ScalarWrapper,
 } from "metabase/visualizations/components/ScalarValue";
-import { ScalarTitleContainer } from "metabase/visualizations/components/ScalarValue/ScalarValue.styled";
 import { NoBreakoutError } from "metabase/visualizations/lib/errors";
 import { compactifyValue } from "metabase/visualizations/lib/scalar_utils";
 import { columnSettings } from "metabase/visualizations/lib/settings/column";
@@ -50,7 +48,6 @@ import {
   getDefaultComparison,
   getValueHeight,
   getValueWidth,
-  isPeriodVisible,
   isSuitableScalarColumn,
   validateComparisons,
 } from "./utils";
@@ -91,7 +88,7 @@ export function SmartScalar({
     return null;
   }
 
-  const { value, clicked, comparisons, display, formatOptions } = trend;
+  const { value, clicked, comparisons, formatOptions } = trend;
 
   const innerHeight = isDashboard ? height - DASHCARD_HEADER_HEIGHT : height;
 
@@ -137,7 +134,7 @@ export function SmartScalar({
           />
         </span>
       </ScalarContainer>
-      {isPeriodVisible(innerHeight) && <ScalarPeriod period={display.date} />}
+      {/* Date display removed */}
       {comparisons.map((comparison, index) => (
         <Box maw="100%" key={index} data-testid="scalar-previous-value">
           <PreviousValueComparison
@@ -149,30 +146,6 @@ export function SmartScalar({
         </Box>
       ))}
     </ScalarWrapper>
-  );
-}
-
-function ScalarPeriod({ period, onClick }) {
-  return (
-    <ScalarTitleContainer data-testid="scalar-period" lines={1}>
-      <Text
-        component="h3"
-        ta="center"
-        style={{ overflow: "hidden", cursor: onClick && "pointer" }}
-        fw={700}
-        size="0.875rem"
-        className={cx(
-          DashboardS.fullscreenNormalText,
-          DashboardS.fullscreenNightText,
-          EmbedFrameS.fullscreenNightText,
-        )}
-        onClick={onClick}
-      >
-        <Ellipsified tooltip={period} lines={1} placement="bottom">
-          {period}
-        </Ellipsified>
-      </Text>
-    </ScalarTitleContainer>
   );
 }
 
@@ -289,10 +262,6 @@ function PreviousValueComparison({
       }) <= availableComparisonWidth,
   );
 
-  const tooltipFullDetailDisplay = getDetailCandidate(valueCandidates[0], {
-    inTooltip: true,
-  });
-
   const VariationPercent = ({ inTooltip, iconSize, children }) => {
     const noChangeColor =
       inTooltip || isNightMode
@@ -309,23 +278,6 @@ function PreviousValueComparison({
     );
   };
 
-  const VariationDetails = ({ inTooltip, children }) => {
-    if (!children) {
-      return null;
-    }
-
-    const detailColor = inTooltip
-      ? "var(--mb-color-tooltip-text-secondary)"
-      : "var(--mb-color-text-secondary)";
-
-    return (
-      <Title order={4} style={{ whiteSpace: "pre", color: detailColor }}>
-        <Separator inTooltip={inTooltip} />
-        {children}
-      </Title>
-    );
-  };
-
   return (
     <Tooltip
       disabled={fullDetailDisplay === fittedDetailDisplay}
@@ -335,9 +287,7 @@ function PreviousValueComparison({
           <VariationPercent iconSize={TOOLTIP_ICON_SIZE} inTooltip>
             {display.percentChange}
           </VariationPercent>
-          <VariationDetails inTooltip>
-            {tooltipFullDetailDisplay}
-          </VariationDetails>
+          {/* Removed comparison details from tooltip */}
         </Flex>
       }
     >
@@ -356,7 +306,7 @@ function PreviousValueComparison({
         <VariationPercent iconSize={ICON_SIZE}>
           {fittedChangeDisplay}
         </VariationPercent>
-        <VariationDetails>{fittedDetailDisplay}</VariationDetails>
+        {/* Removed comparison description text */}
       </Flex>
     </Tooltip>
   );
