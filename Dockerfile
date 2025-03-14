@@ -4,8 +4,6 @@
 
 FROM node:22-bullseye as builder
 
-ARG MB_EDITION=oss
-ARG VERSION
 
 WORKDIR /home/node
 
@@ -26,7 +24,7 @@ RUN git config --global --add safe.directory /home/node
 # install frontend dependencies
 RUN yarn --frozen-lockfile
 
-RUN INTERACTIVE=false CI=true MB_EDITION=$MB_EDITION bin/build.sh :version ${VERSION}
+RUN INTERACTIVE=false MB_EDITION=oss bin/build.sh
 
 # ###################
 # # STAGE 2: runner
