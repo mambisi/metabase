@@ -110,27 +110,32 @@ export function getDefaultComparison(
 ): SmartScalarComparison[] {
   const [
     {
-      data: { insights },
+      data: { cols },
     },
   ] = series;
 
-  const dateUnit = insights?.find(
-    insight => insight.col === settings["scalar.field"],
-  )?.unit;
+  // Check if there are comparable columns for default comparison
+  const comparableColumns = getColumnsForComparison(cols, settings);
 
-  if (!dateUnit) {
+  if (comparableColumns.length > 0) {
+    // If there are other numeric columns, default to comparing with the first one
     return [
       {
         id: uuid(),
-        type: COMPARISON_TYPES.PREVIOUS_VALUE,
+        type: COMPARISON_TYPES.ANOTHER_COLUMN,
+        column: comparableColumns[0].name,
+        label: comparableColumns[0].display_name,
       },
     ];
   }
 
+  // If no other columns to compare with, default to a static number comparison
   return [
     {
       id: uuid(),
-      type: COMPARISON_TYPES.PREVIOUS_PERIOD,
+      type: COMPARISON_TYPES.STATIC_NUMBER,
+      value: 0,
+      label: t`Baseline`,
     },
   ];
 }
@@ -154,16 +159,13 @@ export function getComparisonOptions(
 ) {
   const [
     {
-      data: { cols, rows },
+      data: { cols },
     },
   ] = series;
 
-  const insights = series[0].data.insights ?? [];
+  const options: ComparisonMenuOption[] = [];
 
-  const options: ComparisonMenuOption[] = [
-    createComparisonMenuOption({ type: COMPARISON_TYPES.PREVIOUS_VALUE }),
-  ];
-
+  // Add comparison to another column option
   const comparableColumns = getColumnsForComparison(cols, settings);
   if (comparableColumns.length > 0) {
     options.push(
@@ -171,38 +173,50 @@ export function getComparisonOptions(
     );
   }
 
+  // Add static value comparison option - always available
   options.push(
     createComparisonMenuOption({ type: COMPARISON_TYPES.STATIC_NUMBER }),
   );
 
-  const dateUnit = insights.find(
-    insight => insight.col === settings["scalar.field"],
-  )?.unit;
-
-  if (!dateUnit) {
-    return options;
-  }
-
-  const maxPeriodsAgo = getMaxPeriodsAgo({ cols, rows, dateUnit });
-
-  // only add this option is # number of selectable periods ago is >= 2
-  // since we already have an option for 1 period ago -> PREVIOUS_PERIOD
-  if (maxPeriodsAgo && maxPeriodsAgo >= 2) {
+  // Check if we have a date dimension column to enable time-based comparisons
+  const dimensionColIndex = Array.isArray(cols)
+    ? cols.findIndex(col => isDate(col))
+    : -1;
+  if (dimensionColIndex !== -1) {
+    // If we have a date column, add time-based comparison options
     options.unshift(
-      createComparisonMenuOption({
-        type: COMPARISON_TYPES.PERIODS_AGO,
-        dateUnit,
-        maxValue: maxPeriodsAgo,
-      }),
+      createComparisonMenuOption({ type: COMPARISON_TYPES.PREVIOUS_VALUE }),
     );
-  }
 
-  options.unshift(
-    createComparisonMenuOption({
-      type: COMPARISON_TYPES.PREVIOUS_PERIOD,
-      dateUnit,
-    }),
-  );
+    // Check for date insights
+    const insights = series[0].data.insights ?? [];
+    const dateUnit = insights.find(
+      insight => insight.col === settings["scalar.field"],
+    )?.unit;
+
+    if (dateUnit) {
+      options.unshift(
+        createComparisonMenuOption({
+          type: COMPARISON_TYPES.PREVIOUS_PERIOD,
+          dateUnit,
+        }),
+      );
+
+      const rows = series[0].data.rows;
+      const maxPeriodsAgo = getMaxPeriodsAgo({ cols, rows, dateUnit });
+
+      // Only add this option if # number of selectable periods ago is >= 2
+      if (maxPeriodsAgo && maxPeriodsAgo >= 2) {
+        options.unshift(
+          createComparisonMenuOption({
+            type: COMPARISON_TYPES.PERIODS_AGO,
+            dateUnit,
+            maxValue: maxPeriodsAgo,
+          }),
+        );
+      }
+    }
+  }
 
   return options;
 }
@@ -228,6 +242,7 @@ export function isComparisonValid(
     }
 
     const isExistingColumn =
+      Array.isArray(cols) &&
       cols.find(col => col.name === comparison?.column) != null;
 
     const isDifferentFromPrimaryColumn =
@@ -236,23 +251,30 @@ export function isComparisonValid(
     return isExistingColumn && isDifferentFromPrimaryColumn;
   }
 
-  if (comparison.type === COMPARISON_TYPES.PREVIOUS_VALUE) {
-    return true;
-  }
-
   if (comparison.type === COMPARISON_TYPES.STATIC_NUMBER) {
     return !isEmpty(comparison?.value) && !isEmpty(comparison?.label);
   }
 
-  const dateUnit = insights?.find(
-    insight => insight.col === settings["scalar.field"],
-  )?.unit;
+  // For time-based comparisons, we need a date column
+  const hasDateColumn = Array.isArray(cols) && cols.some(col => isDate(col));
 
-  if (!dateUnit) {
-    return false;
+  if (comparison.type === COMPARISON_TYPES.PREVIOUS_VALUE) {
+    return hasDateColumn;
   }
 
-  return true;
+  if (
+    comparison.type === COMPARISON_TYPES.PREVIOUS_PERIOD ||
+    comparison.type === COMPARISON_TYPES.PERIODS_AGO
+  ) {
+    // These require both a date column and date unit insights
+    const dateUnit = insights?.find(
+      insight => insight.col === settings["scalar.field"],
+    )?.unit;
+
+    return hasDateColumn && !isEmpty(dateUnit);
+  }
+
+  return false;
 }
 
 export function validateComparisons(
@@ -289,7 +311,9 @@ function getMaxPeriodsAgo({
   rows,
   dateUnit,
 }: getMaxPeriodsAgoParameters) {
-  const dimensionIndex = cols.findIndex(col => isDate(col));
+  const dimensionIndex = Array.isArray(cols)
+    ? cols.findIndex(col => isDate(col))
+    : -1;
 
   if (dimensionIndex === -1) {
     return null;

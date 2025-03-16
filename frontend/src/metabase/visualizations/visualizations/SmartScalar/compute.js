@@ -20,11 +20,9 @@ export function computeTrend(series, insights, settings, { getColor }) {
       settings,
     });
 
-    const { clicked, date, dateUnitSettings, formatOptions, value } =
-      currentMetricData;
+    const { clicked, formatOptions, value } = currentMetricData;
 
     const displayValue = formatValue(value, formatOptions);
-    const displayDate = formatDateStr({ date, dateUnitSettings });
 
     return {
       trend: {
@@ -33,7 +31,6 @@ export function computeTrend(series, insights, settings, { getColor }) {
         formatOptions,
         display: {
           value: displayValue,
-          date: displayDate,
         },
         comparisons: comparisons.map(comparison =>
           buildComparisonObject({
@@ -145,22 +142,14 @@ function computeComparison({ comparison, currentMetricData, series }) {
 function getCurrentMetricData({ series, insights, settings }) {
   const [
     {
-      card: {
-        dataset_query: { type: queryType },
-      },
       data: { rows, cols },
     },
   ] = series;
 
-  // column locations for date and metric
-  const dimensionColIndex = cols.findIndex(col => isDate(col));
-  const metricColIndex = cols.findIndex(
-    col => col.name === settings["scalar.field"],
-  );
-
-  if (dimensionColIndex === -1) {
-    throw Error("No date column was found.");
-  }
+  // Find primary number column
+  const metricColIndex = Array.isArray(cols)
+    ? cols.findIndex(col => col.name === settings["scalar.field"])
+    : -1;
 
   if (metricColIndex === -1) {
     throw Error(
@@ -168,49 +157,49 @@ function getCurrentMetricData({ series, insights, settings }) {
     );
   }
 
-  // get latest value and date
-  const latestRowIndex = _.findLastIndex(rows, row => {
-    const date = row[dimensionColIndex];
-    const value = row[metricColIndex];
+  // Optional date column for compatibility with existing data
+  const dimensionColIndex = Array.isArray(cols)
+    ? cols.findIndex(col => isDate(col))
+    : -1;
 
-    return !isEmpty(value) && !isEmpty(date);
-  });
+  // Find a row with valid primary value
+  const latestRowIndex = Array.isArray(rows)
+    ? _.findLastIndex(rows, row => {
+        const value = row[metricColIndex];
+        return !isEmpty(value);
+      })
+    : -1;
+
   if (latestRowIndex === -1) {
     throw Error("No rows contain a valid value.");
   }
-  const date = rows[latestRowIndex][dimensionColIndex];
+
   const value = rows[latestRowIndex][metricColIndex];
 
   // get metric column metadata
   const metricColumn = cols[metricColIndex];
-  const metricInsight = insights?.find(
-    insight => insight.col === metricColumn.name,
-  );
-  const dateUnit = metricInsight?.unit;
-  const dateColumn = cols[dimensionColIndex];
-  const dateColumnSettings = settings?.column?.(dateColumn) ?? {};
-
-  const dateUnitSettings = {
-    dateColumn,
-    dateColumnSettings,
-    dateUnit,
-    queryType,
-  };
 
   const formatOptions = {
     ...settings.column?.(metricColumn),
     compact: settings["scalar.compact_primary_number"],
+    _currentValue: value, // Store the current value for comparison tooltips
   };
+
+  // Build a clicked object with or without dimension
+  const dimensions =
+    dimensionColIndex !== -1
+      ? [
+          {
+            value: rows[latestRowIndex][dimensionColIndex],
+            column: cols[dimensionColIndex],
+          },
+        ]
+      : [];
 
   const clicked = {
     value,
     column: cols[metricColIndex],
-    dimensions: [
-      {
-        value: rows[latestRowIndex][dimensionColIndex],
-        column: cols[dimensionColIndex],
-      },
-    ],
+    dimensions,
     data: rows[latestRowIndex].map((value, index) => ({
       value,
       col: cols[index],
@@ -220,8 +209,6 @@ function getCurrentMetricData({ series, insights, settings }) {
 
   return {
     clicked,
-    date,
-    dateUnitSettings,
     formatOptions,
     indexData: {
       dimensionColIndex,
@@ -236,9 +223,9 @@ function computeTrendAnotherColumn({ comparison, currentMetricData, series }) {
   const { latestRowIndex } = currentMetricData.indexData;
   const { cols, rows } = series[0].data;
 
-  const columnIndex = cols.findIndex(
-    column => column.name === comparison.column,
-  );
+  const columnIndex = Array.isArray(cols)
+    ? cols.findIndex(column => column.name === comparison.column)
+    : -1;
 
   if (columnIndex === -1) {
     return {

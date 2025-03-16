@@ -1,14 +1,12 @@
 /* eslint-disable react/prop-types */
 import cx from "classnames";
 import { useEffect, useMemo, useRef } from "react";
-import innerText from "react-innertext";
-import { jt, t } from "ttag";
+import { t } from "ttag";
 
 import DashboardS from "metabase/css/dashboard.module.css";
 import { getIsNightMode } from "metabase/dashboard/selectors";
 import { color, lighten } from "metabase/lib/colors";
 import { formatValue } from "metabase/lib/formatting/value";
-import { measureTextWidth } from "metabase/lib/measure-text";
 import { useSelector } from "metabase/lib/redux";
 import { isEmpty } from "metabase/lib/validate";
 import EmbedFrameS from "metabase/public/components/EmbedFrame/EmbedFrame.module.css";
@@ -16,7 +14,6 @@ import { Box, Flex, Text, Tooltip, useMantineTheme } from "metabase/ui";
 import ScalarValue, {
   ScalarWrapper,
 } from "metabase/visualizations/components/ScalarValue";
-import { NoBreakoutError } from "metabase/visualizations/lib/errors";
 import { compactifyValue } from "metabase/visualizations/lib/scalar_utils";
 import { columnSettings } from "metabase/visualizations/lib/settings/column";
 import { fieldSetting } from "metabase/visualizations/lib/settings/utils";
@@ -24,6 +21,7 @@ import {
   getDefaultSize,
   getMinSize,
 } from "metabase/visualizations/shared/utils/sizes";
+import { isNumeric } from "metabase-lib/v1/types/utils/isa";
 
 import { ScalarContainer } from "../Scalar/Scalar.styled";
 
@@ -32,10 +30,8 @@ import { VariationIcon, VariationValue } from "./SmartScalar.styled";
 import { CHANGE_TYPE_OPTIONS, computeTrend } from "./compute";
 import {
   DASHCARD_HEADER_HEIGHT,
-  ICON_MARGIN_RIGHT,
   ICON_SIZE,
   MAX_COMPARISONS,
-  SPACING,
   TOOLTIP_ICON_SIZE,
   VIZ_SETTINGS_DEFAULTS,
 } from "./constants";
@@ -134,7 +130,6 @@ export function SmartScalar({
           />
         </span>
       </ScalarContainer>
-      {/* Date display removed */}
       {comparisons.map((comparison, index) => (
         <Box maw="100%" key={index} data-testid="scalar-previous-value">
           <PreviousValueComparison
@@ -149,36 +144,12 @@ export function SmartScalar({
   );
 }
 
-const Separator = ({ inTooltip }) => {
-  const theme = useMantineTheme();
-  const isNightMode = useSelector(getIsNightMode);
-
-  const separatorColor =
-    isNightMode || inTooltip
-      ? lighten(theme.fn.themeColor("text-medium"), 0.15)
-      : lighten(theme.fn.themeColor("text-light"), 0.25);
-
-  return (
-    <Text
-      d="inline-block"
-      mx="0.2rem"
-      style={{ transform: "scale(0.7)" }}
-      c={separatorColor}
-      component="span"
-    >
-      {" • "}
-    </Text>
-  );
-};
-
 function PreviousValueComparison({
   comparison,
   width,
   fontFamily,
   formatOptions,
 }) {
-  const fontSize = "0.875rem";
-
   const {
     changeType,
     percentChange,
@@ -188,6 +159,9 @@ function PreviousValueComparison({
     changeColor,
     display,
   } = comparison;
+
+  // Get the current value from parent component
+  const currentValue = formatOptions._currentValue;
 
   const theme = useMantineTheme();
   const isNightMode = useSelector(getIsNightMode);
@@ -200,67 +174,6 @@ function PreviousValueComparison({
           width: getChangeWidth(width),
         })
       : display.percentChange;
-
-  const availableComparisonWidth =
-    width -
-    4 * SPACING -
-    ICON_SIZE -
-    ICON_MARGIN_RIGHT -
-    measureTextWidth(innerText(<Separator />), {
-      size: fontSize,
-      family: fontFamily,
-      weight: 700,
-    }) -
-    measureTextWidth(fittedChangeDisplay, {
-      size: fontSize,
-      family: fontFamily,
-      weight: 900,
-    });
-
-  const valueCandidates = [
-    display.comparisonValue,
-    ...(changeType === CHANGE_TYPE_OPTIONS.CHANGED.CHANGE_TYPE
-      ? [formatValue(comparisonValue, { ...formatOptions, compact: true })]
-      : []),
-    "",
-  ];
-
-  const getDetailCandidate = (valueStr, { inTooltip } = {}) => {
-    if (isEmpty(valueStr)) {
-      return comparisonDescStr;
-    }
-
-    const descColor = inTooltip
-      ? "var(--mb-color-tooltip-text-secondary)"
-      : "var(--mb-color-text-secondary)";
-
-    if (isEmpty(comparisonDescStr)) {
-      return (
-        <Text key={valueStr} c={descColor} component="span">
-          {valueStr}
-        </Text>
-      );
-    }
-
-    return jt`${comparisonDescStr}: ${(
-      <Text key="value-str" c={descColor} component="span">
-        {valueStr}
-      </Text>
-    )}`;
-  };
-
-  const detailCandidates = valueCandidates.map(valueStr =>
-    getDetailCandidate(valueStr),
-  );
-  const fullDetailDisplay = detailCandidates[0];
-  const fittedDetailDisplay = detailCandidates.find(
-    e =>
-      measureTextWidth(innerText(e), {
-        size: fontSize,
-        family: fontFamily,
-        weight: 700,
-      }) <= availableComparisonWidth,
-  );
 
   const VariationPercent = ({ inTooltip, iconSize, children }) => {
     const noChangeColor =
@@ -278,19 +191,75 @@ function PreviousValueComparison({
     );
   };
 
-  return (
-    <Tooltip
-      disabled={fullDetailDisplay === fittedDetailDisplay}
-      position="bottom"
-      label={
-        <Flex align="center">
-          <VariationPercent iconSize={TOOLTIP_ICON_SIZE} inTooltip>
-            {display.percentChange}
-          </VariationPercent>
-          {/* Removed comparison details from tooltip */}
+  // Enhanced tooltip showing both current and comparison values
+  const tooltipContent = (() => {
+    const hasComparisonValue = !isEmpty(comparisonValue);
+    const hasCurrentValue = !isEmpty(currentValue);
+
+    if (!hasCurrentValue && !hasComparisonValue) {
+      return (
+        <Box>
+          <Text c="var(--mb-color-tooltip-text-main)">
+            No comparison data available
+          </Text>
+        </Box>
+      );
+    }
+
+    return (
+      <Box>
+        <Flex direction="column" gap="xs">
+          {hasCurrentValue && (
+            <Flex align="center" justify="space-between" gap="md">
+              <Text
+                fw={600}
+                c="var(--mb-color-tooltip-text-main)"
+                component="span"
+              >
+                Current:
+              </Text>
+              <Text c="var(--mb-color-tooltip-text-main)" component="span">
+                {formatValue(currentValue, formatOptions)}
+              </Text>
+            </Flex>
+          )}
+          {hasComparisonValue && (
+            <Flex align="center" justify="space-between" gap="md">
+              <Text
+                fw={600}
+                c="var(--mb-color-tooltip-text-main)"
+                component="span"
+              >
+                {comparisonDescStr || "Comparison"}:
+              </Text>
+              <Text c="var(--mb-color-tooltip-text-main)" component="span">
+                {display.comparisonValue ||
+                  formatValue(comparisonValue, formatOptions)}
+              </Text>
+            </Flex>
+          )}
+          {(hasCurrentValue || hasComparisonValue) &&
+            changeType === CHANGE_TYPE_OPTIONS.CHANGED.CHANGE_TYPE && (
+              <Flex align="center" justify="space-between" gap="md">
+                <Text
+                  fw={600}
+                  c="var(--mb-color-tooltip-text-main)"
+                  component="span"
+                >
+                  Difference:
+                </Text>
+                <VariationPercent iconSize={TOOLTIP_ICON_SIZE} inTooltip>
+                  {display.percentChange}
+                </VariationPercent>
+              </Flex>
+            )}
         </Flex>
-      }
-    >
+      </Box>
+    );
+  })();
+
+  return (
+    <Tooltip position="bottom" label={tooltipContent} withArrow>
       <Flex
         wrap="wrap"
         align="center"
@@ -306,7 +275,6 @@ function PreviousValueComparison({
         <VariationPercent iconSize={ICON_SIZE}>
           {fittedChangeDisplay}
         </VariationPercent>
-        {/* Removed comparison description text */}
       </Flex>
     </Tooltip>
   );
@@ -384,23 +352,29 @@ Object.assign(SmartScalar, {
     click_behavior: {},
   },
 
-  isSensible({ insights }) {
-    return insights && insights.length > 0;
+  // Scalar visualizations are now sensible for any numeric data
+  isSensible({ cols }) {
+    if (!cols || !Array.isArray(cols)) {
+      return false;
+    }
+    return cols.some(col => isNumeric(col));
   },
 
-  // Smart scalars need to have a breakout
-  checkRenderable(
-    [
-      {
-        data: { insights },
-      },
-    ],
-    settings,
-  ) {
-    if (!insights || insights.length === 0) {
-      throw new NoBreakoutError(
-        t`Group only by a time field to see how this has changed over time`,
+  // Check that we have at least one numeric column that can be displayed
+  checkRenderable([{ data: { cols, rows } = {} } = {}], settings) {
+    if (!cols || !Array.isArray(cols)) {
+      throw new Error(t`No data available to display`);
+    }
+
+    const hasSuitableColumns = cols.some(col => isNumeric(col));
+    if (!hasSuitableColumns) {
+      throw new Error(
+        t`This visualization requires at least one numeric column`,
       );
+    }
+
+    if (!rows || !Array.isArray(rows) || rows.length === 0) {
+      throw new Error(t`No data available to display`);
     }
   },
 });
