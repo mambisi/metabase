@@ -271,6 +271,7 @@ class Table extends Component<TableProps, TableState> {
     const options = [
       { name: t`Text`, value: null },
       { name: t`Link`, value: "link" },
+      { name: t`Simple Link (shows "link")`, value: "simple_link" },
     ];
 
     if (!column.semantic_type || isEmail(column)) {
@@ -305,7 +306,9 @@ class Table extends Component<TableProps, TableState> {
       hint: linkFieldsHint,
       default: null,
       getHidden: (_, settings) =>
-        settings["view_as"] !== "link" && settings["view_as"] !== "email_link",
+        (settings["view_as"] !== "link" &&
+          settings["view_as"] !== "email_link") ||
+        (settings["view_as"] as string) === "simple_link",
       readDependencies: ["view_as"],
       getProps: (
         column,
@@ -331,7 +334,8 @@ class Table extends Component<TableProps, TableState> {
       widget: ChartSettingLinkUrlInput,
       hint: linkFieldsHint,
       default: null,
-      getHidden: (_, settings) => settings["view_as"] !== "link",
+      getHidden: (_, settings) =>
+        settings["view_as"] !== "link" && settings["view_as"] !== "simple_link",
       readDependencies: ["view_as"],
       getProps: (
         column,

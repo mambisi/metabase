@@ -34,12 +34,13 @@ export function getUrlProtocol(url: string) {
 }
 
 export function formatUrl(value: string, options: OptionsType = {}) {
-  const { jsx, rich } = options;
+  const { jsx, rich, view_as } = options;
 
   const url = getLinkUrl(value, options);
 
   if (jsx && rich && url) {
-    const text = getLinkText(value, options);
+    const text =
+      view_as === "simple_link" ? "link" : getLinkText(value, options);
     const className = cx(CS.link, CS.linkWrappable);
 
     // (metabase#51099) prevent url from being rendered as a link when in sdk
@@ -67,6 +68,11 @@ export function formatUrl(value: string, options: OptionsType = {}) {
 function getLinkText(value: string, options: OptionsType) {
   const { view_as, link_text, clicked } = options;
 
+  // Simple link always returns "link" text
+  if (view_as === "simple_link") {
+    return "link";
+  }
+
   const isExplicitLink = view_as === "link";
   const hasCustomizedText = link_text && clicked;
 
@@ -87,7 +93,7 @@ function getLinkUrl(
   value: string,
   { view_as, link_url, clicked, column }: OptionsType,
 ) {
-  const isExplicitLink = view_as === "link";
+  const isExplicitLink = view_as === "link" || view_as === "simple_link";
   const hasCustomizedUrl = link_url && clicked;
 
   if (isExplicitLink && hasCustomizedUrl) {

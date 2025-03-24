@@ -20,6 +20,7 @@ export interface OptionsType extends TimeOnlyOptions {
   jsx?: boolean;
   link_text?: string;
   link_url?: string;
+  simple_link?: string;
   majorWidth?: number;
   markdown_template?: any;
   maximumFractionDigits?: number;
