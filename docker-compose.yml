@@ -12,6 +12,14 @@ services:
       - "--api.dashboard=true"
       - "--api.insecure=false"
       - "--log.level=INFO"
+      # HTTPS configuration using Let's Encrypt
+      - "--certificatesresolvers.letsencrypt.acme.httpchallenge=true"
+      - "--certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=web"
+      - "--certificatesresolvers.letsencrypt.acme.email=admin@sepana.io"
+      - "--certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json"
+      # HTTP to HTTPS redirect
+      - "--entrypoints.web.http.redirections.entrypoint.to=websecure"
+      - "--entrypoints.web.http.redirections.entrypoint.scheme=https"
     ports:
       - "80:80"
       - "443:443"
@@ -23,10 +31,12 @@ services:
     restart: always
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.traefik-dashboard.rule=PathPrefix(`/dashboard`)"
+      - "traefik.http.routers.traefik-dashboard.rule=Host(`metabase-beta.sepana.io`) && PathPrefix(`/dashboard`)"
       - "traefik.http.routers.traefik-dashboard.service=api@internal"
-      - "traefik.http.routers.traefik-dashboard.entrypoints=web"
+      - "traefik.http.routers.traefik-dashboard.entrypoints=websecure"
       - "traefik.http.routers.traefik-dashboard.middlewares=traefik-auth"
+      - "traefik.http.routers.traefik-dashboard.tls=true"
+      - "traefik.http.routers.traefik-dashboard.tls.certresolver=letsencrypt"
       - "traefik.http.middlewares.traefik-auth.basicauth.users=admin:$$apr1$$9bUqPFoU$$J0HkX5jKl.Ni5CDnCBQmX."
 
   metabase:
@@ -51,8 +61,10 @@ services:
       - metanet1
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.metabase.rule=PathPrefix(`/`)"
-      - "traefik.http.routers.metabase.entrypoints=web"
+      - "traefik.http.routers.metabase.rule=Host(`metabase-beta.sepana.io`)"
+      - "traefik.http.routers.metabase.entrypoints=websecure"
+      - "traefik.http.routers.metabase.tls=true"
+      - "traefik.http.routers.metabase.tls.certresolver=letsencrypt"
       - "traefik.http.services.metabase.loadbalancer.server.port=3000"
     restart: always
 
@@ -75,4 +87,4 @@ networks:
 
 volumes:
   metabase-data:
-  postgres-data: 
+  postgres-data:
