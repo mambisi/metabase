@@ -62,6 +62,23 @@ export const Table = styled.table`
   td:first-of-type {
     padding-left: 1.44em;
   }
+
+  thead {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    background-color: var(--mb-color-bg-white);
+
+    &::after {
+      content: "";
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      height: 2px;
+      background-color: ${() => color("border")};
+    }
+  }
 `;
 
 export const SortIcon = styled(
