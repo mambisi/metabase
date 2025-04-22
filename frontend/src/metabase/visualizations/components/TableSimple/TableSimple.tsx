@@ -182,24 +182,57 @@ const TableSimpleInner = forwardRef<HTMLDivElement, TableSimpleProps>(
             const cellValue = rows[rowIndex][columnIndex];
             let matches = false;
 
+            // Convert rule.value to the appropriate type for comparison
+            const ruleValueForComparison = (() => {
+              // Try to convert to number if it looks like a number
+              if (!isNaN(Number(rule.value)) && rule.value !== "") {
+                return Number(rule.value);
+              }
+              return rule.value;
+            })();
+
             switch (rule.operator) {
-              case "=":
-                matches = cellValue === rule.value;
+              case "=": {
+                // Handle type conversion for comparison
+                const cellStr = String(cellValue);
+                const ruleStr = String(ruleValueForComparison);
+                matches = cellStr === ruleStr;
                 break;
-              case "!=":
-                matches = cellValue !== rule.value;
+              }
+              case "!=": {
+                const cellStrNe = String(cellValue);
+                const ruleStrNe = String(ruleValueForComparison);
+                matches = cellStrNe !== ruleStrNe;
                 break;
+              }
               case ">":
-                matches = cellValue > rule.value;
+                // For these operators, try to ensure numeric comparison
+                if (typeof cellValue === "number") {
+                  matches = cellValue > Number(ruleValueForComparison);
+                } else {
+                  matches = String(cellValue) > String(ruleValueForComparison);
+                }
                 break;
               case "<":
-                matches = cellValue < rule.value;
+                if (typeof cellValue === "number") {
+                  matches = cellValue < Number(ruleValueForComparison);
+                } else {
+                  matches = String(cellValue) < String(ruleValueForComparison);
+                }
                 break;
               case ">=":
-                matches = cellValue >= rule.value;
+                if (typeof cellValue === "number") {
+                  matches = cellValue >= Number(ruleValueForComparison);
+                } else {
+                  matches = String(cellValue) >= String(ruleValueForComparison);
+                }
                 break;
               case "<=":
-                matches = cellValue <= rule.value;
+                if (typeof cellValue === "number") {
+                  matches = cellValue <= Number(ruleValueForComparison);
+                } else {
+                  matches = String(cellValue) <= String(ruleValueForComparison);
+                }
                 break;
               case "is-null":
                 matches = cellValue == null || cellValue === "";
@@ -328,24 +361,56 @@ const TableSimpleInner = forwardRef<HTMLDivElement, TableSimpleProps>(
           const cellValue = rows[rowIndex][columnIndex];
           let matches = false;
 
+          // Convert rule.value to the appropriate type for comparison
+          const ruleValueForComparison = (() => {
+            // Try to convert to number if it looks like a number
+            if (!isNaN(Number(rule.value)) && rule.value !== "") {
+              return Number(rule.value);
+            }
+            return rule.value;
+          })();
           switch (rule.operator) {
-            case "=":
-              matches = cellValue === rule.value;
+            case "=": {
+              // Handle type conversion for comparison
+              const cellStr = String(cellValue);
+              const ruleStr = String(ruleValueForComparison);
+              matches = cellStr === ruleStr;
               break;
-            case "!=":
-              matches = cellValue !== rule.value;
+            }
+            case "!=": {
+              const cellStrNe = String(cellValue);
+              const ruleStrNe = String(ruleValueForComparison);
+              matches = cellStrNe !== ruleStrNe;
               break;
+            }
             case ">":
-              matches = cellValue > rule.value;
+              // For these operators, try to ensure numeric comparison
+              if (typeof cellValue === "number") {
+                matches = cellValue > Number(ruleValueForComparison);
+              } else {
+                matches = String(cellValue) > String(ruleValueForComparison);
+              }
               break;
             case "<":
-              matches = cellValue < rule.value;
+              if (typeof cellValue === "number") {
+                matches = cellValue < Number(ruleValueForComparison);
+              } else {
+                matches = String(cellValue) < String(ruleValueForComparison);
+              }
               break;
             case ">=":
-              matches = cellValue >= rule.value;
+              if (typeof cellValue === "number") {
+                matches = cellValue >= Number(ruleValueForComparison);
+              } else {
+                matches = String(cellValue) >= String(ruleValueForComparison);
+              }
               break;
             case "<=":
-              matches = cellValue <= rule.value;
+              if (typeof cellValue === "number") {
+                matches = cellValue <= Number(ruleValueForComparison);
+              } else {
+                matches = String(cellValue) <= String(ruleValueForComparison);
+              }
               break;
             case "is-null":
               matches = cellValue == null || cellValue === "";
