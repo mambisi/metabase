@@ -84,6 +84,7 @@ interface TableCellProps {
   getExtraDataForClick: (clickObject: ClickObject) => Record<string, unknown>;
   checkIsVisualizationClickable: (clickObject: ClickObject) => boolean;
   onVisualizationClick?: (clickObject: ClickObject) => void;
+  style?: React.CSSProperties;
 }
 
 export function TableCell({
@@ -98,6 +99,7 @@ export function TableCell({
   getExtraDataForClick,
   checkIsVisualizationClickable,
   onVisualizationClick,
+  style,
 }: TableCellProps) {
   const { rows, cols } = data;
   const column = cols[columnIndex];
@@ -189,6 +191,7 @@ export function TableCell({
       className={classNames}
       backgroundColor={backgroundColor}
       isRightAligned={isColumnRightAligned(column)}
+      style={style}
     >
       <CellContent
         isHighlighted={isID(column)}

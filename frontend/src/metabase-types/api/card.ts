@@ -163,6 +163,12 @@ export type ColumnFormattingSetting =
   | ColumnSingleFormattingSetting
   | ColumnRangeFormattingSetting;
 
+export type TableRowPinningSetting = {
+  columnName: string;
+  operator: ConditionalFormattingComparisonOperator;
+  value: string;
+};
+
 export type ColumnNameColumnSplitSetting = {
   rows: string[];
   columns: string[];

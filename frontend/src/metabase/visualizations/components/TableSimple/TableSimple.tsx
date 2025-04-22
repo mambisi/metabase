@@ -158,8 +158,86 @@ const TableSimpleInner = forwardRef<HTMLDivElement, TableSimpleProps>(
         indexes.reverse();
       }
 
+      // Apply conditional row pinning if enabled
+      const rowPinningRules = settings["table.row_pinning"] || [];
+      if (rowPinningRules.length > 0) {
+        // For each row, check if it matches any pinning rule
+        const matchesRules = new Set<number>();
+
+        rowPinningRules.forEach(rule => {
+          if (!rule.columnName || !rule.operator) {
+            return; // Skip incomplete rules
+          }
+
+          // Find the column index for this rule
+          const columnIndex = cols.findIndex(
+            col => col.name === rule.columnName,
+          );
+          if (columnIndex === -1) {
+            return; // Column not found
+          }
+
+          // Check each row against this rule
+          indexes.forEach(rowIndex => {
+            const cellValue = rows[rowIndex][columnIndex];
+            let matches = false;
+
+            switch (rule.operator) {
+              case "=":
+                matches = cellValue === rule.value;
+                break;
+              case "!=":
+                matches = cellValue !== rule.value;
+                break;
+              case ">":
+                matches = cellValue > rule.value;
+                break;
+              case "<":
+                matches = cellValue < rule.value;
+                break;
+              case ">=":
+                matches = cellValue >= rule.value;
+                break;
+              case "<=":
+                matches = cellValue <= rule.value;
+                break;
+              case "is-null":
+                matches = cellValue == null || cellValue === "";
+                break;
+              case "not-null":
+                matches = cellValue != null && cellValue !== "";
+                break;
+              case "contains":
+                matches = String(cellValue).includes(rule.value);
+                break;
+              case "does-not-contain":
+                matches = !String(cellValue).includes(rule.value);
+                break;
+              case "starts-with":
+                matches = String(cellValue).startsWith(rule.value);
+                break;
+              case "ends-with":
+                matches = String(cellValue).endsWith(rule.value);
+                break;
+            }
+
+            if (matches) {
+              matchesRules.add(rowIndex);
+            }
+          });
+        });
+
+        // Sort rows with matching rules to the top
+        if (matchesRules.size > 0) {
+          const [pinnedRows, unpinnedRows] = _.partition(indexes, index =>
+            matchesRules.has(index),
+          );
+          return [...pinnedRows, ...unpinnedRows];
+        }
+      }
+
       return indexes;
-    }, [cols, rows, sortColumn, sortDirection]);
+    }, [cols, rows, sortColumn, sortDirection, settings]);
 
     // Get lazy loaded rows based on visible count
     const paginatedRowIndexes = useMemo(() => {
@@ -215,15 +293,114 @@ const TableSimpleInner = forwardRef<HTMLDivElement, TableSimpleProps>(
       [sortColumn, sortDirection, getColumnTitle, setSort],
     );
 
+    // Identify pinned rows based on conditional rules
+    const getPinnedRowInfo = useCallback(() => {
+      // Get all row pinning rules
+      const rowPinningRules = settings["table.row_pinning"] || [];
+      if (rowPinningRules.length === 0) {
+        return {
+          isPinned: () => false,
+          pinnedColumnIndexes: new Map<number, number>(),
+        };
+      }
+
+      // For each row, check if it matches any pinning rule
+      const pinnedRows = new Map<number, number>(); // rowIndex -> columnIndex that caused pinning
+
+      rowPinningRules.forEach(rule => {
+        if (!rule.columnName || !rule.operator) {
+          return; // Skip incomplete rules
+        }
+
+        // Find the column index for this rule
+        const columnIndex = cols.findIndex(col => col.name === rule.columnName);
+        if (columnIndex === -1) {
+          return; // Column not found
+        }
+
+        // Check each row against this rule
+        rowIndexes.forEach(rowIndex => {
+          // Skip if the row is already pinned by a higher-priority rule
+          if (pinnedRows.has(rowIndex)) {
+            return;
+          }
+
+          const cellValue = rows[rowIndex][columnIndex];
+          let matches = false;
+
+          switch (rule.operator) {
+            case "=":
+              matches = cellValue === rule.value;
+              break;
+            case "!=":
+              matches = cellValue !== rule.value;
+              break;
+            case ">":
+              matches = cellValue > rule.value;
+              break;
+            case "<":
+              matches = cellValue < rule.value;
+              break;
+            case ">=":
+              matches = cellValue >= rule.value;
+              break;
+            case "<=":
+              matches = cellValue <= rule.value;
+              break;
+            case "is-null":
+              matches = cellValue == null || cellValue === "";
+              break;
+            case "not-null":
+              matches = cellValue != null && cellValue !== "";
+              break;
+            case "contains":
+              matches = String(cellValue).includes(rule.value);
+              break;
+            case "does-not-contain":
+              matches = !String(cellValue).includes(rule.value);
+              break;
+            case "starts-with":
+              matches = String(cellValue).startsWith(rule.value);
+              break;
+            case "ends-with":
+              matches = String(cellValue).endsWith(rule.value);
+              break;
+          }
+
+          if (matches) {
+            pinnedRows.set(rowIndex, columnIndex);
+          }
+        });
+      });
+
+      return {
+        isPinned: (rowIdx: number) => pinnedRows.has(rowIdx),
+        pinnedColumnIndexes: pinnedRows,
+      };
+    }, [settings, cols, rows, rowIndexes]);
+
+    const { isPinned, pinnedColumnIndexes } = getPinnedRowInfo();
+
     const renderRow = useCallback(
       (rowIndex: number, index: number) => {
         const ref = index === 0 ? firstRowRef : null;
+        const rowIsPinned = isPinned(rowIndex);
+        const pinnedColumnIndex = pinnedColumnIndexes.get(rowIndex);
+
         return (
           <tr
             key={rowIndex}
             ref={ref}
             data-testid="table-row"
             data-allow-page-break-after
+            style={
+              rowIsPinned
+                ? {
+                    backgroundColor: "var(--mb-color-bg-light)",
+                    position: "relative",
+                  }
+                : undefined
+            }
           >
             {data.rows[rowIndex].map((value, columnIndex) => (
               <TableCell
@@ -239,6 +416,13 @@ const TableSimpleInner = forwardRef<HTMLDivElement, TableSimpleProps>(
                 getExtraDataForClick={getExtraDataForClick}
                 checkIsVisualizationClickable={checkIsVisualizationClickable}
                 onVisualizationClick={onVisualizationClick}
+                style={
+                  rowIsPinned && columnIndex === pinnedColumnIndex
+                    ? {
+                        fontWeight: "bold",
+                      }
+                    : undefined
+                }
               />
             ))}
           </tr>
@@ -254,6 +438,8 @@ const TableSimpleInner = forwardRef<HTMLDivElement, TableSimpleProps>(
         getExtraDataForClick,
         onVisualizationClick,
         firstRowRef,
+        isPinned,
+        pinnedColumnIndexes,
       ],
     );
 

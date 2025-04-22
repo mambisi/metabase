@@ -13,6 +13,7 @@ import {
   ChartSettingsTableFormatting,
   isFormattable,
 } from "metabase/visualizations/components/settings/ChartSettingsTableFormatting";
+import { ChartSettingsTableRowPinning } from "metabase/visualizations/components/settings/ChartSettingsTableRowPinning";
 import {
   isPivoted as _isPivoted,
   columnSettings,
@@ -188,6 +189,15 @@ class Table extends Component<TableProps, TableState> {
         },
       ]: Series) => cols.filter(isFormattable).length === 0,
       readDependencies: ["table.pivot"],
+    },
+    "table.row_pinning": {
+      section: t`Rows`,
+      title: t`Pin rows by condition`,
+      widget: ChartSettingsTableRowPinning,
+      default: [],
+      getProps: (series: Series) => ({
+        cols: series[0].data.cols,
+      }),
     },
     "table._cell_background_getter": {
       getValue(
