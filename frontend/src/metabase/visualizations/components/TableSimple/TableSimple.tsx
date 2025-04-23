@@ -13,6 +13,7 @@ import ExplicitSize from "metabase/components/ExplicitSize";
 import { Ellipsified } from "metabase/core/components/Ellipsified";
 import CS from "metabase/css/core/index.css";
 import DashboardS from "metabase/css/dashboard.module.css";
+import { alpha, color } from "metabase/lib/colors";
 import EmbedFrameS from "metabase/public/components/EmbedFrame/EmbedFrame.module.css";
 import { isColumnRightAligned } from "metabase/visualizations/lib/table";
 import type { ClickObject } from "metabase-lib";
@@ -59,6 +60,7 @@ function formatCellValueForSorting(value: RowValue, column: DatasetColumn) {
 interface TableSimpleProps {
   card: Card;
   data: DatasetData;
+  rawData?: DatasetData; // Original data before column filtering
   series: Series;
   settings: VisualizationSettings;
   height: number;
@@ -76,6 +78,7 @@ const TableSimpleInner = forwardRef<HTMLDivElement, TableSimpleProps>(
   function TableSimpleInner(
     {
       data,
+      rawData,
       series,
       settings,
       height,
@@ -340,13 +343,20 @@ const TableSimpleInner = forwardRef<HTMLDivElement, TableSimpleProps>(
       // For each row, check if it matches any pinning rule
       const pinnedRows = new Map<number, number>(); // rowIndex -> columnIndex that caused pinning
 
+      // Use raw data if available for checking all columns (visible or not)
+      const dataToCheck = rawData || data;
+      const rowsToCheck = dataToCheck.rows;
+      const colsToCheck = dataToCheck.cols;
+
       rowPinningRules.forEach(rule => {
         if (!rule.columnName || !rule.operator) {
           return; // Skip incomplete rules
         }
 
-        // Find the column index for this rule
-        const columnIndex = cols.findIndex(col => col.name === rule.columnName);
+        // Find the column index for this rule in the original data
+        const columnIndex = colsToCheck.findIndex(
+          col => col.name === rule.columnName,
+        );
         if (columnIndex === -1) {
           return; // Column not found
         }
@@ -358,7 +368,8 @@ const TableSimpleInner = forwardRef<HTMLDivElement, TableSimpleProps>(
             return;
           }
 
-          const cellValue = rows[rowIndex][columnIndex];
+          // Use the value from the original dataset
+          const cellValue = rowsToCheck[rowIndex][columnIndex];
           let matches = false;
 
           // Convert rule.value to the appropriate type for comparison
@@ -442,15 +453,25 @@ const TableSimpleInner = forwardRef<HTMLDivElement, TableSimpleProps>(
         isPinned: (rowIdx: number) => pinnedRows.has(rowIdx),
         pinnedColumnIndexes: pinnedRows,
       };
-    }, [settings, cols, rows, rowIndexes]);
+    }, [settings, rowIndexes, rawData, data]);
 
     const { isPinned, pinnedColumnIndexes } = getPinnedRowInfo();
+
+    // Get all pinned row indexes in order
+    const pinnedRowIndexes = useMemo(() => {
+      return rowIndexes.filter(idx => isPinned(idx));
+    }, [rowIndexes, isPinned]);
 
     const renderRow = useCallback(
       (rowIndex: number, index: number) => {
         const ref = index === 0 ? firstRowRef : null;
         const rowIsPinned = isPinned(rowIndex);
         const pinnedColumnIndex = pinnedColumnIndexes.get(rowIndex);
+
+        // Calculate the position for this pinned row
+        const pinnedRowPosition = rowIsPinned
+          ? pinnedRowIndexes.indexOf(rowIndex)
+          : -1;
 
         return (
           <tr
@@ -462,7 +483,10 @@ const TableSimpleInner = forwardRef<HTMLDivElement, TableSimpleProps>(
               rowIsPinned
                 ? {
                     backgroundColor: "var(--mb-color-bg-light)",
-                    position: "relative",
+                    position: "sticky",
+                    top: `${35 + pinnedRowPosition * 35}px`, // Position based on row order
+                    zIndex: 1,
+                    boxShadow: `0 1px 2px ${alpha(color("shadow"), 0.1)}`, // Add shadow for visual separation
                   }
                 : undefined
             }
@@ -505,6 +529,7 @@ const TableSimpleInner = forwardRef<HTMLDivElement, TableSimpleProps>(
         firstRowRef,
         isPinned,
         pinnedColumnIndexes,
+        pinnedRowIndexes,
       ],
     );
 

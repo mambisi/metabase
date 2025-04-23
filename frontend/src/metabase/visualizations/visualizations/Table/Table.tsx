@@ -526,6 +526,7 @@ class Table extends Component<TableProps, TableState> {
         {...this.props}
         question={this.state.question}
         data={data}
+        rawData={series[0].data} // Pass the raw, unfiltered data for pinning checks
         isPivoted={isPivoted}
         getColumnTitle={this.getColumnTitle}
         getColumnSortDirection={this.getColumnSortDirection}
