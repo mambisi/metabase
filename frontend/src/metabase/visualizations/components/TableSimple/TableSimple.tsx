@@ -311,6 +311,15 @@ const TableSimpleInner = forwardRef<HTMLDivElement, TableSimpleProps>(
 
     const renderColumnHeader = useCallback(
       (col: DatasetColumn, colIndex: number) => {
+        // Skip columns that are only included for pinning
+        // Type cast to access the custom property added by Table component
+        if (
+          (col as DatasetColumn & { visibility_for_pinning_only?: boolean })
+            .visibility_for_pinning_only
+        ) {
+          return null;
+        }
+
         const iconName = sortDirection === "desc" ? "chevrondown" : "chevronup";
         const onClick = () => setSort(colIndex);
         return (
@@ -490,34 +499,49 @@ const TableSimpleInner = forwardRef<HTMLDivElement, TableSimpleProps>(
                 : undefined
             }
           >
-            {data.rows[rowIndex].map((value, columnIndex) => (
-              <TableCell
-                key={`${rowIndex}-${columnIndex}`}
-                value={value}
-                data={data}
-                series={series}
-                settings={settings}
-                rowIndex={rowIndex}
-                columnIndex={columnIndex}
-                isPivoted={isPivoted}
-                getCellBackgroundColor={getCellBackgroundColor}
-                getExtraDataForClick={getExtraDataForClick}
-                checkIsVisualizationClickable={checkIsVisualizationClickable}
-                onVisualizationClick={onVisualizationClick}
-                style={
-                  rowIsPinned && columnIndex === pinnedColumnIndex
-                    ? {
-                        fontWeight: "bold",
-                      }
-                    : undefined
-                }
-              />
-            ))}
+            {data.rows[rowIndex].map((value, columnIndex) => {
+              // Skip rendering cells for columns that are only for pinning
+              // Type cast to access the custom property added by Table component
+              if (
+                (
+                  cols[columnIndex] as DatasetColumn & {
+                    visibility_for_pinning_only?: boolean;
+                  }
+                ).visibility_for_pinning_only
+              ) {
+                return null;
+              }
+
+              return (
+                <TableCell
+                  key={`${rowIndex}-${columnIndex}`}
+                  value={value}
+                  data={data}
+                  series={series}
+                  settings={settings}
+                  rowIndex={rowIndex}
+                  columnIndex={columnIndex}
+                  isPivoted={isPivoted}
+                  getCellBackgroundColor={getCellBackgroundColor}
+                  getExtraDataForClick={getExtraDataForClick}
+                  checkIsVisualizationClickable={checkIsVisualizationClickable}
+                  onVisualizationClick={onVisualizationClick}
+                  style={
+                    rowIsPinned && columnIndex === pinnedColumnIndex
+                      ? {
+                          fontWeight: "bold",
+                        }
+                      : undefined
+                  }
+                />
+              );
+            })}
           </tr>
         );
       },
       [
         data,
+        cols,
         series,
         settings,
         isPivoted,
@@ -561,7 +585,18 @@ const TableSimpleInner = forwardRef<HTMLDivElement, TableSimpleProps>(
               )}
             >
               <thead ref={headerRef}>
-                <tr>{cols.map(renderColumnHeader)}</tr>
+                <tr>
+                  {cols
+                    .filter(
+                      col =>
+                        !(
+                          col as DatasetColumn & {
+                            visibility_for_pinning_only?: boolean;
+                          }
+                        ).visibility_for_pinning_only,
+                    )
+                    .map(renderColumnHeader)}
+                </tr>
               </thead>
               <tbody>{paginatedRowIndexes.map(renderRow)}</tbody>
             </Table>

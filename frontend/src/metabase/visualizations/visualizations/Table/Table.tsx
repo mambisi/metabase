@@ -412,7 +412,9 @@ class Table extends Component<TableProps, TableState> {
     } else {
       const { cols, rows, results_timezone } = data;
       const columnSettings = settings["table.columns"] ?? [];
-      const columnIndexes = findColumnIndexesForColumnSettings(
+
+      // Get the column indices that should be shown based on user settings
+      const visibleColumnIndexes = findColumnIndexesForColumnSettings(
         cols,
         columnSettings,
       ).filter(
@@ -423,10 +425,55 @@ class Table extends Component<TableProps, TableState> {
               columnSettings[settingIndex].enabled)),
       );
 
+      // Get row pinning rules to identify columns needed for pinning
+      const rowPinningRules = settings["table.row_pinning"] || [];
+      let columnIndexesToUse = visibleColumnIndexes;
+
+      // If row pinning is enabled, we need to include pinning columns even if they're hidden
+      if (rowPinningRules && rowPinningRules.length > 0) {
+        // Get column indices for pinning rules
+        const pinningColumnIndices = rowPinningRules
+          .filter(rule => rule.columnName)
+          .map(rule => {
+            const colIndex = cols.findIndex(
+              col => col.name === rule.columnName,
+            );
+            return colIndex;
+          })
+          .filter(index => index !== -1);
+
+        // Include pinning columns even if they're not visible
+        const allIndices = new Set([...visibleColumnIndexes]);
+        pinningColumnIndices.forEach(idx => allIndices.add(idx));
+        columnIndexesToUse = Array.from(allIndices);
+      }
+
+      // Mark columns that are included for pinning but should not be displayed
+      const hiddenColumns = new Set(
+        columnIndexesToUse.filter(idx => !visibleColumnIndexes.includes(idx)),
+      );
+
+      // Create a data structure that includes all necessary columns
+      // but marks some as hidden for pinning purposes only
+      const colsWithHiddenFlags = columnIndexesToUse.map((i, _displayIndex) => {
+        const col = cols[i];
+        // Use type assertion to add properties without modifying the type definition
+        return {
+          ...col,
+          // Add a special flag for columns included only for pinning
+          visibility_for_pinning_only: hiddenColumns.has(i),
+          // Store original index for reference
+          original_index: i,
+        } as typeof col & {
+          visibility_for_pinning_only?: boolean;
+          original_index?: number;
+        };
+      });
+
       this.setState({
         data: {
-          cols: columnIndexes.map(i => cols[i]),
-          rows: rows.map(row => columnIndexes.map(i => row[i])),
+          cols: colsWithHiddenFlags,
+          rows: rows.map(row => columnIndexesToUse.map(i => row[i])),
           results_timezone,
         },
         question,
