@@ -344,9 +344,8 @@ const TableSimpleInner = forwardRef<HTMLDivElement, TableSimpleProps>(
       const pinnedRows = new Map<number, number>(); // rowIndex -> columnIndex that caused pinning
 
       // Use raw data if available for checking all columns (visible or not)
-      const dataToCheck = rawData || data;
-      const rowsToCheck = dataToCheck.rows;
-      const colsToCheck = dataToCheck.cols;
+      const rowsToCheck = rawData ? rawData.rows : data.rows;
+      const colsToCheck = rawData ? rawData.cols : data.cols;
 
       rowPinningRules.forEach(rule => {
         if (!rule.columnName || !rule.operator) {
